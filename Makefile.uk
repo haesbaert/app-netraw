@@ -1,0 +1,3 @@
+$(eval $(call addlib,appnetraw))
+
+APPNETRAW_SRCS-y += $(APPNETRAW_BASE)/main.c

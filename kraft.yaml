@@ -1,0 +1,18 @@
+---
+specification: '0.5'
+name: netraw
+unikraft:
+  version: stable
+  kconfig:
+    - CONFIG_LIBUKSCHED=n
+    - CONFIG_LIBUKSCHED_COOP=n
+    - CONFIG_LIBUKBOOT=y
+    - CONFIG_LIBUKBOOT_BANNER_MINIMAL=y
+    - CONFIG_LIBUKBOOT_MAXNBARGS=60
+    - CONFIG_LIBUKBOOT_INITBBUDDY=n
+    - CONFIG_LIBUKBOOT_NOSCHED=y
+    - CONFIG_LIBUKBOOT_INITSCHED=n
+    - CONFIG_LIBUKBOOT_INITSCHEDCOOP=n
+targets:
+  - architecture: x86_64
+    platform: kvm
