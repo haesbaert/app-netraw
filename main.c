@@ -56,7 +56,7 @@ main(int __unused, char *__unused[])
 		errx("uk_netdev_probe");
 	/* netdev has to be in unconfigured state */
 	if (uk_netdev_state_get(dev) != UK_NETDEV_UNCONFIGURED)
-		errx("uk_netdev_state_get not UNCONFIGURED (%d)", uk_netdev_state_get(dev));
+		errx("uk_netdev_state_get not UNCONFIGURED");
 	/* Get device information */
 	uk_netdev_info_get(dev, &dev_info);	    /* void */
 	/* We're gonna poll */
