@@ -16,6 +16,7 @@ unikraft:
     - CONFIG_LIBUKSWRAND=y
     - CONFIG_LIBUKSWRAND_CHACHA=y
     - CONFIG_LIBUKSWRAND_INITIALSEED_TIME=y
+    - CONFIG_LIBPOSIX_TIME=y
 
 targets:
   - architecture: x86_64
