@@ -6,6 +6,10 @@
 #include <uk/essentials.h>
 #include <uk/netdev.h>
 
+#ifdef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
+#error not ready for CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
+#endif
+
 static void
 errx(const char *fmt, ...)
 {
@@ -19,13 +23,33 @@ errx(const char *fmt, ...)
 	exit(1);
 }
 
+#define PKT_BUFLEN 2048
+
 static uint16_t
 dev_alloc_rxpkts(void *argp, struct uk_netbuf *nb[], uint16_t count)
 {
-	/* XXX TODO XXX */
-	argp=argp;nb=nb;count=count;
+	struct uk_alloc *a;
+	struct uk_netdev_info *dev_info;
+	struct uk_netbuf *b;
+	int i;
 
-	return (0);
+	a = uk_alloc_get_default();
+	dev_info = argp;
+
+	for (i = 0; i < count; ++i) {
+		b = uk_netbuf_alloc_buf(a, PKT_BUFLEN, dev_info->ioalign,
+		    dev_info->nb_encap_rx, 0, NULL);
+		if (b == NULL) {
+			nb[i] = NULL;
+			break;
+		}
+		b->len = b->buflen - dev_info->nb_encap_rx;
+		nb[i] = b;
+	}
+
+	printf("%s: %d packets (why twice on boot??)\n", __func__, i);
+
+	return (i);
 }
 
 
@@ -37,7 +61,8 @@ main(int __unused, char *__unused[])
 	struct uk_netdev_conf dev_conf;
 	struct uk_netdev_info dev_info = {0};
 	struct uk_netdev_rxqueue_conf rxq_conf;
-	/* struct uk_netdev_txqueue_conf txq_conf = {0}; */
+	struct uk_netdev_txqueue_conf txq_conf = {0};
+	const struct uk_hwaddr *hwaddr;
 
 	printf("herrow herrow\n");
 
@@ -54,6 +79,7 @@ main(int __unused, char *__unused[])
 		    uk_netdev_state_get(dev));
 	if (uk_netdev_probe(dev) != 0)
 		errx("uk_netdev_probe");
+	/* XXX at this point lwip/uknetdev does a bunch of eget_info */
 	/* netdev has to be in unconfigured state */
 	if (uk_netdev_state_get(dev) != UK_NETDEV_UNCONFIGURED)
 		errx("uk_netdev_state_get not UNCONFIGURED");
@@ -69,7 +95,7 @@ main(int __unused, char *__unused[])
 	/* RX */
 	rxq_conf.a = a;
 	rxq_conf.alloc_rxpkts = dev_alloc_rxpkts;
-	rxq_conf.alloc_rxpkts_argp = NULL;
+	rxq_conf.alloc_rxpkts_argp = &dev_info;
 	/* We are polling so no callbacks */
 	rxq_conf.callback = NULL;
 	rxq_conf.callback_cookie = NULL;
@@ -78,8 +104,23 @@ main(int __unused, char *__unused[])
 /* 	rxq_conf.s = uk_sched_current(); */
 	if (uk_netdev_rxq_configure(dev, 0, 0, &rxq_conf) != 0)
 		errx("uk_netdev_rxq_configure");
+	/* TX */
+	txq_conf.a = a;
+	if (uk_netdev_txq_configure(dev, 0, 0, &txq_conf) != 0)
+		errx("uk_netdev_txq_configure");
+	/* Kick it */
+	if (uk_netdev_start(dev) != 0)
+		errx("uk_netdev_start");
+	/* print mac */
+	UK_ASSERT(UK_NETDEV_HWADDR_LEN == 6);
+	if ((hwaddr = uk_netdev_hwaddr_get(dev)) == NULL)
+		errx("uk_netdev_hwaddr_get");
+	printf("hwaddr=%02x:%02x:%02x:%02x:%02x:%02x\n",
+	    hwaddr->addr_bytes[0], hwaddr->addr_bytes[1],
+	    hwaddr->addr_bytes[2], hwaddr->addr_bytes[3],
+	    hwaddr->addr_bytes[4], hwaddr->addr_bytes[5]);
 
-	printf("bye bye \n");
+	printf("bye bye\n");
 
 	return (0);
 }
