@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -39,6 +40,33 @@ millisleep(unsigned int millisec)
 	while (ret && errno == EINTR);
 }
 
+static void
+dump_data(const void *s, size_t len)
+{
+	size_t i, j;
+	const uint8_t *p = s;
+
+	for (i = 0; i < len; i += 16) {
+		printf("%.4zu: ", i);
+		for (j = i; j < i + 16; j++) {
+			if (j < len)
+				printf("%02x ", p[j]);
+			else
+				printf("   ");
+		}
+		printf(" ");
+		for (j = i; j < i + 16; j++) {
+			if (j < len) {
+				if  (isascii(p[j]) && isprint(p[j]))
+					printf("%c", p[j]);
+				else
+					printf(".");
+			}
+		}
+		printf("\n");
+	}
+}
+
 static uint16_t
 dev_alloc_rxpkts(void *argp, struct uk_netbuf *nb[], uint16_t count)
 {
@@ -74,13 +102,15 @@ pollpkts(struct uk_netdev *dev)
 	int r;
 
 	while (1) {
+		millisleep(10);
 		r = uk_netdev_rx_one(dev, 0, &nb);
 		if (unlikely(r < 0))
 			errx("uk_netdev_rx_one");
 		if (uk_netdev_status_notready(r))
 			continue;
-		printf("nb=%p len=%d\n", nb, nb->len);
-		millisleep(10);
+		/* printf("nb=%p len=%d\n", nb, nb->len); */
+		dump_data(nb->data, nb->len);
+		printf("\n");
 	}
 }
 #endif /* !CONFIG_LIBUKNETDEV_DISPATCHERTHREADS */
