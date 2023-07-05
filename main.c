@@ -110,6 +110,7 @@ pollpkts(struct uk_netdev *dev)
 			continue;
 		/* printf("nb=%p len=%d\n", nb, nb->len); */
 		dump_data(nb->data, nb->len);
+		uk_netbuf_free(nb);
 		printf("\n");
 	}
 }
