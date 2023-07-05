@@ -24,10 +24,6 @@
 #include <uk/essentials.h>
 #include <uk/netdev.h>
 
-#ifdef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
-#error not ready for CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
-#endif
-
 #define PKT_BUFLEN 2048
 
 static void
@@ -83,6 +79,26 @@ dump_data(const void *s, size_t len)
 	}
 }
 
+static void uk_netdev_queue_intr(struct uk_netdev *dev,
+    uint16_t queue_id __unused, void *__unused)
+{
+	struct uk_netbuf *nb;
+	int r;
+
+	do {
+		r = uk_netdev_rx_one(dev, 0, &nb);
+		if (unlikely(r < 0))
+			errx("uk_netdev_rx_one");
+		if (uk_netdev_status_notready(r)) {
+			/* No (more) packets received */
+			break;
+		}
+		dump_data(nb->data, nb->len);
+		printf("\n");
+		uk_netbuf_free(nb);
+	} while (uk_netdev_status_more(r));
+}
+
 static uint16_t
 dev_alloc_rxpkts(void *argp, struct uk_netbuf *nb[], uint16_t count)
 {
@@ -110,28 +126,6 @@ dev_alloc_rxpkts(void *argp, struct uk_netbuf *nb[], uint16_t count)
 	return (i);
 }
 
-#ifndef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
-static void
-pollpkts(struct uk_netdev *dev)
-{
-	struct uk_netbuf *nb;
-	int r;
-
-	while (1) {
-		millisleep(10);
-		r = uk_netdev_rx_one(dev, 0, &nb);
-		if (unlikely(r < 0))
-			errx("uk_netdev_rx_one");
-		if (uk_netdev_status_notready(r))
-			continue;
-		/* printf("nb=%p len=%d\n", nb, nb->len); */
-		dump_data(nb->data, nb->len);
-		uk_netbuf_free(nb);
-		printf("\n");
-	}
-}
-#endif /* !CONFIG_LIBUKNETDEV_DISPATCHERTHREADS */
-
 int
 main(int __unused, char *__unused[])
 {
@@ -157,13 +151,11 @@ main(int __unused, char *__unused[])
 		errx("uk_netdev_state_get not UNPROBED");
 	if (uk_netdev_probe(dev) != 0)
 		errx("uk_netdev_probe");
-	/* XXX at this point lwip/uknetdev does a bunch of eget_info */
-	/* netdev has to be in unconfigured state */
 	if (uk_netdev_state_get(dev) != UK_NETDEV_UNCONFIGURED)
 		errx("uk_netdev_state_get not UNCONFIGURED");
 	/* Get device information */
 	uk_netdev_info_get(dev, &dev_info);	    /* void */
-	/* We're gonna poll */
+	/* Are we polling? */
 #ifndef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
 	dev_info.features &= ~UK_NETDEV_F_RXQ_INTR;
 #endif /* !CONFIG_LIBUKNETDEV_DISPATCHERTHREADS */
@@ -177,11 +169,15 @@ main(int __unused, char *__unused[])
 	rxq_conf.alloc_rxpkts = dev_alloc_rxpkts;
 	rxq_conf.alloc_rxpkts_argp = &dev_info;
 	/* We are polling so no callbacks */
+#ifdef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
+	rxq_conf.callback = uk_netdev_queue_intr;
+	rxq_conf.callback_cookie = NULL;
+	rxq_conf.s = uk_sched_current();
+#else
 	rxq_conf.callback = NULL;
 	rxq_conf.callback_cookie = NULL;
-#ifdef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
-	rxq_conf.s = uk_sched_current();
 #endif	/* CONFIG_LIBUKNETDEV_DISPATCHERTHREADS */
+
 	if (uk_netdev_rxq_configure(dev, 0, 0, &rxq_conf) != 0)
 		errx("uk_netdev_rxq_configure");
 	/* TX */
@@ -200,9 +196,24 @@ main(int __unused, char *__unused[])
 	    hwaddr->addr_bytes[2], hwaddr->addr_bytes[3],
 	    hwaddr->addr_bytes[4], hwaddr->addr_bytes[5]);
 
-#ifndef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
-	pollpkts(dev);
-#endif	/* !CONFIG_LIBUKNETDEV_DISPATCHERTHREADS */
+#ifdef CONFIG_LIBUKNETDEV_DISPATCHERTHREADS
+	switch (uk_netdev_rxq_intr_enable(dev, 0)) {
+	case 0:
+		break;
+	case 1: /* device requested us to poll/flush the rings */
+		uk_netdev_queue_intr(dev, 0, NULL);
+		break;
+	default:
+		errx("uk_netdev_rxq_intr_enable");
+	}
+	for (;;)
+		millisleep(1000);
+#else /* CONFIG_LIBUKNETDEV_DISPATCHERTHREADS */
+	for (;;) {
+		uk_netdev_queue_intr(dev, 0, NULL);
+		millisleep(10);
+	}
+#endif	/* CONFIG_LIBUKNETDEV_DISPATCHERTHREADS */
 
 	printf("bye bye\n");
 
