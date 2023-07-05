@@ -79,7 +79,8 @@ dump_data(const void *s, size_t len)
 	}
 }
 
-static void uk_netdev_queue_intr(struct uk_netdev *dev,
+static void
+uk_netdev_queue_intr(struct uk_netdev *dev,
     uint16_t queue_id __unused, void *__unused)
 {
 	struct uk_netbuf *nb;
@@ -89,10 +90,8 @@ static void uk_netdev_queue_intr(struct uk_netdev *dev,
 		r = uk_netdev_rx_one(dev, 0, &nb);
 		if (unlikely(r < 0))
 			errx("uk_netdev_rx_one");
-		if (uk_netdev_status_notready(r)) {
-			/* No (more) packets received */
+		if (uk_netdev_status_notready(r))
 			break;
-		}
 		dump_data(nb->data, nb->len);
 		printf("\n");
 		uk_netbuf_free(nb);
