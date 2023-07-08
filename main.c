@@ -165,7 +165,7 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 	myip4 |= 172 << 24;
 	myip4 |= 44 << 16;
 	myip4 |= 0 << 8;
-	myip4 |= (2 << 0);
+	myip4 |= 2 << 0;
 	if (ah->ar_tpa != htonl(myip4))
 		goto done;
 	/* Reflect */
