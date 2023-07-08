@@ -28,21 +28,21 @@
 
 #define PKT_BUFLEN	2048
 #define ETH_ADDR_LEN	6
-#define	IP4_ADDR_LEN	4
-#define	ETHERTYPE_IP	0x0800	/* IP protocol */
-#define	ETHERTYPE_ARP	0x0806	/* ARP protocol */
+#define IP4_ADDR_LEN	4
+#define ETHERTYPE_IP	0x0800	/* IP protocol */
+#define ETHERTYPE_ARP	0x0806	/* ARP protocol */
 
 uint8_t ether_broadcast[ETH_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 uint8_t ether_null[ETH_ADDR_LEN] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
-struct	ether_header {
+struct ether_header {
 	uint8_t  ether_dhost[ETH_ADDR_LEN];
 	uint8_t  ether_shost[ETH_ADDR_LEN];
 	uint16_t ether_type;
 };
 
 /* Hardcoded for ipv4 */
-struct	arphdr {
+struct arphdr {
 	uint16_t ar_hrd;	/* format of hardware address */
 #define ARPHRD_ETHER	1	/* ethernet hardware format */
 #define ARPHRD_IEEE802	6	/* IEEE 802 hardware format */
@@ -51,18 +51,18 @@ struct	arphdr {
 	uint16_t ar_pro;	/* format of protocol address */
 	uint8_t  ar_hln;	/* length of hardware address */
 	uint8_t  ar_pln;	/* length of protocol address */
-	uint16_t ar_op;	/* one of: */
-#define	ARPOP_REQUEST	1	/* request to resolve address */
-#define	ARPOP_REPLY	2	/* response to previous request */
-#define	ARPOP_REVREQUEST 3	/* request protocol address given hardware */
-#define	ARPOP_REVREPLY	4	/* response giving protocol address */
-#define	ARPOP_INVREQUEST 8	/* request to identify peer */
-#define	ARPOP_INVREPLY	9	/* response identifying peer */
+	uint16_t ar_op; /* one of: */
+#define ARPOP_REQUEST	1	/* request to resolve address */
+#define ARPOP_REPLY	2	/* response to previous request */
+#define ARPOP_REVREQUEST 3	/* request protocol address given hardware */
+#define ARPOP_REVREPLY	4	/* response giving protocol address */
+#define ARPOP_INVREQUEST 8	/* request to identify peer */
+#define ARPOP_INVREPLY	9	/* response identifying peer */
 	uint8_t  ar_sha[ETH_ADDR_LEN]; /* sender hardware address */
 	uint32_t ar_spa;	/* sender protocol address */
 	uint8_t  ar_tha[ETH_ADDR_LEN]; /* target hardware address */
 	uint32_t ar_tpa;	/* target protocol address */
-}__packed; /* unaligned since we're forcing ipv4 */
+} __packed; /* unaligned since we're forcing ipv4 */
 
 static void
 errx(const char *fmt, ...)
@@ -141,8 +141,8 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 	eh = nb->data;
 	if (ntohs(eh->ether_type) != ETHERTYPE_ARP)
 		goto done;
-	if (memcmp(eh->ether_dhost, ether_broadcast, sizeof(eh->ether_dhost)) &&
-	    memcmp(eh->ether_dhost, myeth->addr_bytes, sizeof(eh->ether_dhost)))
+	if (memcmp(eh->ether_dhost, ether_broadcast, ETH_ADDR_LEN)) &&
+	    memcmp(eh->ether_dhost, myeth->addr_bytes, ETH_ADDR_LEN))
 		goto done;
 	/* Arp layer */
 	ah = (struct arphdr *)(eh + 1);
@@ -156,9 +156,9 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 		goto done;
 	if (ntohs(ah->ar_op) != ARPOP_REQUEST)
 		goto done;
-	if (memcmp(ah->ar_tha, ether_null, sizeof(eh->ether_dhost)) &&
-	    memcmp(ah->ar_tha, ether_broadcast, sizeof(eh->ether_dhost) &&
-	    memcmp(eh->ether_dhost, myeth->addr_bytes, sizeof(eh->ether_dhost))))
+	if (memcmp(ah->ar_tha, ether_null, ETH_ADDR_LEN) &&
+	    memcmp(ah->ar_tha, ether_broadcast, ETH_ADDR_LEN) &&
+	    memcmp(eh->ether_dhost, myeth->addr_bytes, ETH_ADDR_LEN))
 		goto done;
 	/* 172.44.0.2 */
 	myip4 |= 172 << 24;
