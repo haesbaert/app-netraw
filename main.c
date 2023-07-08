@@ -132,13 +132,13 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 	if (ntohs(eh->ether_type) != ETHERTYPE_ARP)
 		goto done;
 	/* XXX also check for targetted */
-	if (memcmp(eh->ether_dhost, ether_broadcast, sizeof(eh->ether_dhost)))
+	if (memcmp(eh->ether_dhost, ether_broadcast, sizeof(eh->ether_dhost)) &&
+	    memcmp(eh->ether_dhost, myeth->addr_bytes, sizeof(eh->ether_dhost)))
 		goto done;
 	/* Arp layer */
 	ah = (struct arphdr *)(eh + 1);
-	if (ah->ar_hrd != ntohs(ARPHRD_ETHER)) {
+	if (ah->ar_hrd != ntohs(ARPHRD_ETHER))
 		goto done;
-	}
 	if (ah->ar_pro != ntohs(ETHERTYPE_IP))
 		goto done;
 	if (ah->ar_hln != ETH_ADDR_LEN)
@@ -147,7 +147,9 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 		goto done;
 	if (ntohs(ah->ar_op) != ARPOP_REQUEST)
 		goto done;
-	if (memcmp(ah->ar_tha, ether_null, sizeof(eh->ether_dhost)))
+	if (memcmp(ah->ar_tha, ether_null, sizeof(eh->ether_dhost)) &&
+	    memcmp(ah->ar_tha, ether_broadcast, sizeof(eh->ether_dhost) &&
+	    memcmp(eh->ether_dhost, myeth->addr_bytes, sizeof(eh->ether_dhost))))
 		goto done;
 	/* 172.44.0.2 */
 	myip4 |= 172 << 24;
