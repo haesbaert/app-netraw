@@ -141,7 +141,6 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 	eh = nb->data;
 	if (ntohs(eh->ether_type) != ETHERTYPE_ARP)
 		goto done;
-	/* XXX also check for targetted */
 	if (memcmp(eh->ether_dhost, ether_broadcast, sizeof(eh->ether_dhost)) &&
 	    memcmp(eh->ether_dhost, myeth->addr_bytes, sizeof(eh->ether_dhost)))
 		goto done;
