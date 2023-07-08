@@ -118,6 +118,16 @@ dump_data(const void *s, size_t len)
 }
 
 static void
+send_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
+{
+	int r;
+
+	do {
+		r = uk_netdev_tx_one(dev, 0, nb);
+	} while (uk_netdev_status_notready(r));
+}
+
+static void
 handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 {
 	struct ether_header *eh;
@@ -167,11 +177,10 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 	ah->ar_tpa = ah->ar_spa;
 	ah->ar_spa = htonl(myip4);
 
-	dump_data(nb->data, nb->len);
-	printf("\n");
-	printf("\nWOULD REPLY !\n");
-	/* TODO actually reply */
-
+	/* dump_data(nb->data, nb->len); */
+	printf("sent arp reply\n");
+	send_netbuf(dev, nb);
+	return;
 done:
 	uk_netbuf_free(nb);
 }
