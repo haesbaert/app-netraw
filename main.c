@@ -21,10 +21,48 @@
 #include <string.h>
 #include <time.h>
 
+#include <netinet/in.h>
+
 #include <uk/essentials.h>
 #include <uk/netdev.h>
 
-#define PKT_BUFLEN 2048
+#define PKT_BUFLEN	2048
+#define ETH_ADDR_LEN	6
+#define	IP4_ADDR_LEN	4
+#define	ETHERTYPE_IP	0x0800	/* IP protocol */
+#define	ETHERTYPE_ARP	0x0806	/* ARP protocol */
+
+uint8_t ether_broadcast[ETH_ADDR_LEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+uint8_t ether_null[ETH_ADDR_LEN] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+
+struct	ether_header {
+	uint8_t  ether_dhost[ETH_ADDR_LEN];
+	uint8_t  ether_shost[ETH_ADDR_LEN];
+	uint16_t ether_type;
+};
+
+/* Hardcoded for ipv4 */
+struct	arphdr {
+	uint16_t ar_hrd;	/* format of hardware address */
+#define ARPHRD_ETHER	1	/* ethernet hardware format */
+#define ARPHRD_IEEE802	6	/* IEEE 802 hardware format */
+#define ARPHRD_FRELAY	15	/* frame relay hardware format */
+#define ARPHRD_IEEE1394	24	/* IEEE 1394 (FireWire) hardware format */
+	uint16_t ar_pro;	/* format of protocol address */
+	uint8_t  ar_hln;	/* length of hardware address */
+	uint8_t  ar_pln;	/* length of protocol address */
+	uint16_t ar_op;	/* one of: */
+#define	ARPOP_REQUEST	1	/* request to resolve address */
+#define	ARPOP_REPLY	2	/* response to previous request */
+#define	ARPOP_REVREQUEST 3	/* request protocol address given hardware */
+#define	ARPOP_REVREPLY	4	/* response giving protocol address */
+#define	ARPOP_INVREQUEST 8	/* request to identify peer */
+#define	ARPOP_INVREPLY	9	/* response identifying peer */
+	uint8_t  ar_sha[ETH_ADDR_LEN]; /* sender hardware address */
+	uint32_t ar_spa;	/* sender protocol address */
+	uint8_t  ar_tha[ETH_ADDR_LEN]; /* target hardware address */
+	uint32_t ar_tpa;	/* target protocol address */
+}__packed; /* unaligned since we're forcing ipv4 */
 
 static void
 errx(const char *fmt, ...)
@@ -80,6 +118,63 @@ dump_data(const void *s, size_t len)
 }
 
 static void
+handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
+{
+	struct ether_header *eh;
+	struct arphdr *ah;
+	uint32_t myip4 = 0;
+	const struct uk_hwaddr *myeth = uk_netdev_hwaddr_get(dev);
+
+	/* Assume a contiguous chain */
+	if (nb->len < sizeof(*eh) + sizeof(*ah))
+		goto done;
+	eh = nb->data;
+	if (ntohs(eh->ether_type) != ETHERTYPE_ARP)
+		goto done;
+	/* XXX also check for targetted */
+	if (memcmp(eh->ether_dhost, ether_broadcast, sizeof(eh->ether_dhost)))
+		goto done;
+	/* Arp layer */
+	ah = (struct arphdr *)(eh + 1);
+	if (ah->ar_hrd != ntohs(ARPHRD_ETHER)) {
+		goto done;
+	}
+	if (ah->ar_pro != ntohs(ETHERTYPE_IP))
+		goto done;
+	if (ah->ar_hln != ETH_ADDR_LEN)
+		goto done;
+	if (ah->ar_pln != IP4_ADDR_LEN)
+		goto done;
+	if (ntohs(ah->ar_op) != ARPOP_REQUEST)
+		goto done;
+	if (memcmp(ah->ar_tha, ether_null, sizeof(eh->ether_dhost)))
+		goto done;
+	/* 172.44.0.2 */
+	myip4 |= 172 << 24;
+	myip4 |= 44 << 16;
+	myip4 |= 0 << 8;
+	myip4 |= (2 << 0);
+	if (ah->ar_tpa != htonl(myip4))
+		goto done;
+	/* Reflect */
+	memcpy(eh->ether_dhost, eh->ether_shost, ETH_ADDR_LEN);
+	memcpy(eh->ether_shost, myeth->addr_bytes, ETH_ADDR_LEN);
+	ah->ar_op = ARPOP_REPLY;
+	memcpy(ah->ar_tha, eh->ether_dhost, ETH_ADDR_LEN);
+	memcpy(ah->ar_sha, myeth->addr_bytes, ETH_ADDR_LEN);
+	ah->ar_tpa = ah->ar_spa;
+	ah->ar_spa = htonl(myip4);
+
+	dump_data(nb->data, nb->len);
+	printf("\n");
+	printf("\nWOULD REPLY !\n");
+	/* TODO actually reply */
+
+done:
+	uk_netbuf_free(nb);
+}
+
+static void
 uk_netdev_queue_intr(struct uk_netdev *dev,
     uint16_t queue_id __unused, void *__unused)
 {
@@ -92,9 +187,7 @@ uk_netdev_queue_intr(struct uk_netdev *dev,
 			errx("uk_netdev_rx_one");
 		if (uk_netdev_status_notready(r))
 			break;
-		dump_data(nb->data, nb->len);
-		printf("\n");
-		uk_netbuf_free(nb);
+		handle_netbuf(dev, nb);
 	} while (uk_netdev_status_more(r));
 }
 
@@ -187,7 +280,7 @@ main(int __unused, char *__unused[])
 	if (uk_netdev_start(dev) != 0)
 		errx("uk_netdev_start");
 	/* print mac */
-	UK_ASSERT(UK_NETDEV_HWADDR_LEN == 6);
+	UK_ASSERT(UK_NETDEV_HWADDR_LEN == ETH_ADDR_LEN);
 	if ((hwaddr = uk_netdev_hwaddr_get(dev)) == NULL)
 		errx("uk_netdev_hwaddr_get");
 	printf("hwaddr=%02x:%02x:%02x:%02x:%02x:%02x\n",
