@@ -159,7 +159,7 @@ handle_netbuf(struct uk_netdev *dev, struct uk_netbuf *nb)
 	/* Reflect */
 	memcpy(eh->ether_dhost, eh->ether_shost, ETH_ADDR_LEN);
 	memcpy(eh->ether_shost, myeth->addr_bytes, ETH_ADDR_LEN);
-	ah->ar_op = ARPOP_REPLY;
+	ah->ar_op = ntohs(ARPOP_REPLY);
 	memcpy(ah->ar_tha, eh->ether_dhost, ETH_ADDR_LEN);
 	memcpy(ah->ar_sha, myeth->addr_bytes, ETH_ADDR_LEN);
 	ah->ar_tpa = ah->ar_spa;
