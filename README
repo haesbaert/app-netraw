@@ -1,0 +1,5 @@
+A unikraft unikernel that brings the interface up manually and answers
+arp requests.
+
+This is exploratory code to be hooked into the ocaml runtime in the
+future, so we can access devices from ocaml directly.
